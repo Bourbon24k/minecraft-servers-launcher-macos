@@ -500,6 +500,42 @@ def get_public_ip() -> str:
         return "не удалось определить"
 
 
+def local_port_status(port: int) -> str:
+    try:
+        result = subprocess.run(
+            ["nc", "-vz", "-G", "3", "127.0.0.1", str(port)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return "не удалось проверить"
+    return "открыт" if result.returncode == 0 else "закрыт"
+
+
+def firewall_status() -> str:
+    tool = "/usr/libexec/ApplicationFirewall/socketfilterfw"
+    if not Path(tool).exists():
+        return "не удалось проверить"
+    try:
+        result = subprocess.run(
+            [tool, "--getglobalstate"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return "не удалось проверить"
+    output = result.stdout.strip()
+    if "disabled" in output.lower():
+        return "выключен"
+    if "enabled" in output.lower():
+        return "включен"
+    return output or "не удалось проверить"
+
+
 @dataclass
 class ManagedServer:
     name: str
@@ -1094,18 +1130,27 @@ class Launcher:
         lan_ip = get_lan_ip()
         public_ip = get_public_ip()
         port = int(server.get("port", 25565))
+        port_state = local_port_status(port)
+        fw_state = firewall_status()
         clean_screen()
         print(f"Сеть: {name}\n")
         print(f"LAN-IP этого Mac:      {lan_ip}")
         print(f"Внешний IP:            {public_ip}")
         print(f"Порт Minecraft TCP:    {port}")
+        print(f"Локальная проверка:    порт {port_state}")
+        print(f"macOS Firewall:        {fw_state}")
         print(f"Адрес в домашней сети: {lan_ip}:{port}")
         if public_ip != "не удалось определить":
             print(f"Адрес из интернета:    {public_ip}:{port}")
-        print("\nДля белого IP обычно нужно:")
+        print("\nЕсли второй ПК в этой же Wi-Fi/домашней сети:")
+        print(f"1. Подключайтесь к {lan_ip}:{port}, не к внешнему IP.")
+        print("2. Проверьте, что второй ПК не в гостевой Wi-Fi сети с изоляцией клиентов.")
+        print("3. Версия клиента Minecraft должна совпадать с версией сервера.")
+        print("\nЕсли второй ПК подключается из интернета:")
         print(f"1. В роутере пробросить TCP {port} -> {lan_ip}:{port}.")
         print("2. В macOS разрешить входящие подключения для Java, если Firewall спросит.")
-        print("3. Оставить этот Mac включенным, пока сервер работает.")
+        print("3. Закрепить LAN-IP этого Mac в DHCP роутера, чтобы проброс не уехал.")
+        print("4. Оставить этот Mac включенным, пока сервер работает.")
         print("\nЕсли порт 25565, игроки часто могут писать только IP без :25565.")
         pause()
 
