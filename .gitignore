@@ -1,0 +1,10 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+
+# Local launcher state, logs, downloaded Java runtimes, and real server files.
+.mc-launcher/
+servers/
+
+# Temporary download artifacts.
+*.download
